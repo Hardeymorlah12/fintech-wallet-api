@@ -43,5 +43,7 @@ http://localhost:8080/swagger-ui/index.html
 
 ## Environment Variables
 6. DB_USERNAME=
+7. ##
 DB_PASSWORD=
+##
 JWT_SECRET=
