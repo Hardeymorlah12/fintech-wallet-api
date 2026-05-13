@@ -42,6 +42,6 @@ http://localhost:8080/swagger-ui/index.html
 5. Start application
 
 ## Environment Variables
-DB_USERNAME=/
-DB_PASSWORD=/
-JWT_SECRET=/
+DB_USERNAME=
+DB_PASSWORD=
+JWT_SECRET=
