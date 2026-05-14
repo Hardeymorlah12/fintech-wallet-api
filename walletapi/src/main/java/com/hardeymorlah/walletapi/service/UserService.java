@@ -5,6 +5,7 @@ import com.hardeymorlah.walletapi.dto.RegisterRequest;
 import com.hardeymorlah.walletapi.dto.UserResponse;
 import com.hardeymorlah.walletapi.entity.Role;
 import com.hardeymorlah.walletapi.entity.User;
+import com.hardeymorlah.walletapi.exception.EmailAlreadyExistsException;
 import com.hardeymorlah.walletapi.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
@@ -21,14 +22,8 @@ import java.time.LocalDateTime;
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
     public ApiResponse<?> registerUser(RegisterRequest request) {
-
         if (userRepository.existsByEmail(request.getEmail())) {
-            return ApiResponse.builder()
-                    .success(false)
-                    .message("Email already exists")
-                    .data(null)
-                    .timestamp(LocalDateTime.now())
-                    .build();
+            throw new EmailAlreadyExistsException("Email already exists");
         }
 
         User user = User.builder()
