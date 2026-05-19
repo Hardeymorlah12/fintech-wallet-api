@@ -19,14 +19,13 @@ import java.util.function.Function;
                 "mysecretkeymysecretkeymysecretkeymysecretkey";
 
         // Generate token
-        public String generateToken(String email) {
+        public String generateToken(String email, String role) {
 
             return Jwts.builder()
                     .setSubject(email)
+                    .claim("role", role)
                     .setIssuedAt(new Date(System.currentTimeMillis()))
-                    .setExpiration(
-                            new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 24)
-                    ) // 24 hours
+                    .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 24))
                     .signWith(getSigningKey(), SignatureAlgorithm.HS256)
                     .compact();
         }

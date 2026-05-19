@@ -1,15 +1,16 @@
 package com.hardeymorlah.walletapi.service;
 
-import com.hardeymorlah.walletapi.dto.ApiResponse;
-import com.hardeymorlah.walletapi.dto.RegisterRequest;
-import com.hardeymorlah.walletapi.dto.UserResponse;
+import com.hardeymorlah.walletapi.dto.*;
 import com.hardeymorlah.walletapi.entity.Role;
 import com.hardeymorlah.walletapi.entity.User;
 import com.hardeymorlah.walletapi.exception.EmailAlreadyExistsException;
+import com.hardeymorlah.walletapi.exception.InvalidCredentialsException;
 import com.hardeymorlah.walletapi.repository.UserRepository;
+import com.hardeymorlah.walletapi.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+
 
 import java.time.LocalDateTime;
 
@@ -18,6 +19,8 @@ import java.time.LocalDateTime;
     public class UserService {
 
     private final UserRepository userRepository;
+
+    private final JwtService jwtService;
 
     private final BCryptPasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
 
@@ -48,6 +51,39 @@ import java.time.LocalDateTime;
                 .success(true)
                 .message("User registered successfully")
                 .data(userResponse)
+                .timestamp(LocalDateTime.now())
+                .build();
+    }
+
+    public ApiResponse<?> loginUser(LoginRequest request) {
+
+        User user = userRepository.findByEmail(request.getEmail())
+                .orElseThrow(() ->
+                        new InvalidCredentialsException("Invalid email or password")
+                );
+
+        boolean passwordMatches = passwordEncoder.matches(
+                request.getPassword(),
+                user.getPassword()
+        );
+
+        if (!passwordMatches) {
+            throw new InvalidCredentialsException("Invalid email or password");
+        }
+
+        String token = jwtService.generateToken(
+                user.getEmail(),
+                user.getRole().name()
+        );
+
+        AuthResponse authResponse = AuthResponse.builder()
+                .token(token)
+                .build();
+
+        return ApiResponse.builder()
+                .success(true)
+                .message("Login successful")
+                .data(authResponse)
                 .timestamp(LocalDateTime.now())
                 .build();
     }

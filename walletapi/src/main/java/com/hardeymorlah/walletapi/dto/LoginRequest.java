@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 
 @Data
+@NotBlank
     public class LoginRequest {
 
         @Email(message = "Invalid email format")

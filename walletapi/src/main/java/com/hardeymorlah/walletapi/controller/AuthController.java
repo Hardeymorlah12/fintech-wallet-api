@@ -1,6 +1,7 @@
 package com.hardeymorlah.walletapi.controller;
 
 import com.hardeymorlah.walletapi.dto.ApiResponse;
+import com.hardeymorlah.walletapi.dto.LoginRequest;
 import com.hardeymorlah.walletapi.dto.RegisterRequest;
 import com.hardeymorlah.walletapi.service.UserService;
 import jakarta.validation.Valid;
@@ -24,6 +25,16 @@ public class AuthController {
     ) {
 
         ApiResponse<?> response = userService.registerUser(request);
+
+        return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<ApiResponse<?>> loginUser(
+            @Valid @RequestBody LoginRequest request
+    ) {
+
+        ApiResponse<?> response = userService.loginUser(request);
 
         return ResponseEntity.ok(response);
     }
