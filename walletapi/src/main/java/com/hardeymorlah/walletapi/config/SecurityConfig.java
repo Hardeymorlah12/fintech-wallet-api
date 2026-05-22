@@ -26,11 +26,25 @@ public class SecurityConfig {
                         session.sessionCreationPolicy(SessionCreationPolicy.STATELESS)
                 )
                 .authorizeHttpRequests(auth -> auth
+
+                        // Swagger endpoints
                         .requestMatchers(
-                                "/api/v1/auth/**",
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**",
+                                "/swagger-ui.html"
+                        ).permitAll()
+
+                        // Public endpoints
+                        .requestMatchers(
+                                "/api/v1/auth/**"
+                        ).permitAll()
+
+                        // Secure endpoints
+                        .requestMatchers(
                                 "/api/v1/wallet/**",
                                 "/api/v1/transactions/**"
-                        ).permitAll()
+                        ).authenticated()
+
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(

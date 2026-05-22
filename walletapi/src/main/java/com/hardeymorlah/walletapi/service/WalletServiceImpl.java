@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
@@ -24,6 +25,7 @@ public class WalletServiceImpl implements WalletService {
     private final WalletRepository walletRepository;
     private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
+    private final NotificationService notificationService;
 
     // =========================
     // JWT USER RESOLUTION
@@ -82,6 +84,26 @@ public class WalletServiceImpl implements WalletService {
         // transactions
         recordTransaction(senderWallet.getId(), amount, TransactionType.DEBIT);
         recordTransaction(receiverWallet.getId(), amount, TransactionType.CREDIT);
+
+        // transactions
+        recordTransaction(senderWallet.getId(), amount, TransactionType.DEBIT);
+        recordTransaction(receiverWallet.getId(), amount, TransactionType.CREDIT);
+
+// sender notification
+        notificationService.createNotification(
+                sender.getId(),
+                "Transfer Successful",
+                "You transferred NGN " + amount +
+                        " to " + receiverWallet.getUser().getFullName()
+        );
+
+// receiver notification
+        notificationService.createNotification(
+                receiverWallet.getUser().getId(),
+                "Wallet Credited",
+                "You received NGN " + amount +
+                        " from " + sender.getFullName()
+        );
 
         return mapToWalletResponse(senderWallet);
     }
@@ -174,7 +196,19 @@ public class WalletServiceImpl implements WalletService {
 
         Wallet updatedWallet = walletRepository.save(wallet);
 
-        recordTransaction(wallet.getId(), amount, TransactionType.CREDIT);
+        // Record transaction
+        recordTransaction(
+                wallet.getId(),
+                amount,
+                TransactionType.CREDIT
+        );
+
+        // Create notification
+        notificationService.createNotification(
+                user.getId(),
+                "Wallet Credited",
+                "Your wallet was credited with NGN " + amount
+        );
 
         return mapToWalletResponse(updatedWallet);
     }
@@ -198,6 +232,12 @@ public class WalletServiceImpl implements WalletService {
         Wallet updatedWallet = walletRepository.save(wallet);
 
         recordTransaction(wallet.getId(), amount, TransactionType.DEBIT);
+        // Create notification
+        notificationService.createNotification(
+                user.getId(),
+                "Wallet Debited",
+                "Your wallet was debited with NGN " + amount
+        );
 
         return mapToWalletResponse(updatedWallet);
     }
