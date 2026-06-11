@@ -2,33 +2,27 @@ package com.hardeymorlah.walletapi.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import java.math.BigDecimal;
+
 import java.time.LocalDateTime;
 
-    @Entity
-    @Table(name = "wallets")
+@Entity
+    @Table(name = "audit_logs")
     @Getter
     @Setter
     @Builder
     @NoArgsConstructor
     @AllArgsConstructor
-    public class Wallet {
+    public class AuditLog {
 
         @Id
         @GeneratedValue(strategy = GenerationType.IDENTITY)
         private Long id;
 
-        @OneToOne
-        @JoinColumn(unique = true)
-        private User user;
+        private Long adminUserId;
 
-        private BigDecimal balance;
+        private String action;
 
-        @Column(nullable = false)
-        private boolean frozen = false;
+        private String target;
 
         private LocalDateTime createdAt;
-
-        private LocalDateTime updatedAt;
     }
-

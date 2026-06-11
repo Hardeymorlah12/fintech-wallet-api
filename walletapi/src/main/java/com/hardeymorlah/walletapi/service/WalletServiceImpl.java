@@ -1,16 +1,14 @@
 package com.hardeymorlah.walletapi.service;
 
 import com.hardeymorlah.walletapi.dto.TransferRequest;
-import com.hardeymorlah.walletapi.dto.UserResponse;
 import com.hardeymorlah.walletapi.dto.WalletResponse;
 import com.hardeymorlah.walletapi.entity.*;
-import com.hardeymorlah.walletapi.exception.InvalidTransferException;
-import com.hardeymorlah.walletapi.exception.ReceiverWalletNotFoundException;
-import com.hardeymorlah.walletapi.exception.WalletAlreadyExistsException;
+import com.hardeymorlah.walletapi.exception.*;
 import com.hardeymorlah.walletapi.repository.TransactionRepository;
 import com.hardeymorlah.walletapi.repository.UserRepository;
 import com.hardeymorlah.walletapi.repository.WalletRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,14 +16,18 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import static com.hardeymorlah.walletapi.service.AdminServiceImpl.getWalletResponse;
+
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class WalletServiceImpl implements WalletService {
 
     private final WalletRepository walletRepository;
     private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
     private final NotificationService notificationService;
+    private final EmailService emailService;
 
     // =========================
     // JWT USER RESOLUTION
@@ -49,60 +51,114 @@ public class WalletServiceImpl implements WalletService {
     public WalletResponse transfer(TransferRequest request) {
 
         User sender = getAuthenticatedUser();
+        BigDecimal amount = request.getAmount();
+
+        log.info(
+                "Transfer initiated by user ID: {} to user ID: {} amount: {}",
+                sender.getId(),
+                request.getToUserId(),
+                amount
+        );
+
+        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new InvalidTransferException(
+                    "Amount must be greater than zero"
+            );
+        }
 
         if (sender.getId().equals(request.getToUserId())) {
-            throw new InvalidTransferException("Cannot transfer to same account");
+            throw new InvalidTransferException(
+                    "Cannot transfer to same account"
+            );
         }
 
         Wallet senderWallet = walletRepository.findByUserId(sender.getId())
-                .orElseThrow(() -> new RuntimeException("Sender wallet not found"));
+                .orElseThrow(() ->
+                        new WalletNotFoundException("Sender wallet not found"));
 
-        Wallet receiverWallet = walletRepository.findByUserId(request.getToUserId())
-                .orElseThrow(() -> new ReceiverWalletNotFoundException("Receiver wallet not found"));
+        if (senderWallet.isFrozen()) {
+            throw new WalletFrozenException(
+                    "Your wallet is frozen. Transfer not allowed."
+            );
+        }
 
-        BigDecimal amount = request.getAmount();
+        Wallet receiverWallet = walletRepository.findByUserId(
+                        request.getToUserId()
+                )
+                .orElseThrow(() ->
+                        new ReceiverWalletNotFoundException(
+                                "Receiver wallet not found"
+                        ));
 
-        if (amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new InvalidTransferException("Amount must be greater than zero");
+        if (receiverWallet.isFrozen()) {
+            throw new WalletFrozenException(
+                    "Receiver wallet is frozen."
+            );
         }
 
         if (senderWallet.getBalance().compareTo(amount) < 0) {
             throw new RuntimeException("Insufficient balance");
         }
 
-        // debit sender
-        senderWallet.setBalance(senderWallet.getBalance().subtract(amount));
+        // Debit sender
+        senderWallet.setBalance(
+                senderWallet.getBalance().subtract(amount)
+        );
         senderWallet.setUpdatedAt(LocalDateTime.now());
 
-        // credit receiver
-        receiverWallet.setBalance(receiverWallet.getBalance().add(amount));
+        // Credit receiver
+        receiverWallet.setBalance(
+                receiverWallet.getBalance().add(amount)
+        );
         receiverWallet.setUpdatedAt(LocalDateTime.now());
 
         walletRepository.save(senderWallet);
         walletRepository.save(receiverWallet);
 
-        // transactions
-        recordTransaction(senderWallet.getId(), amount, TransactionType.DEBIT);
-        recordTransaction(receiverWallet.getId(), amount, TransactionType.CREDIT);
+        String groupReference =
+                "TRF-" + System.currentTimeMillis();
 
-        // transactions
-        recordTransaction(senderWallet.getId(), amount, TransactionType.DEBIT);
-        recordTransaction(receiverWallet.getId(), amount, TransactionType.CREDIT);
+// Sender transaction
+        recordTransaction(
+                senderWallet.getId(),
+                amount,
+                TransactionType.DEBIT,
+                TransactionStatus.SUCCESS,
+                groupReference
+        );
 
-// sender notification
+// Receiver transaction
+        recordTransaction(
+                receiverWallet.getId(),
+                amount,
+                TransactionType.CREDIT,
+                TransactionStatus.SUCCESS,
+                groupReference
+        );
+
+        // Sender notification
         notificationService.createNotification(
                 sender.getId(),
                 "Transfer Successful",
                 "You transferred NGN " + amount +
-                        " to " + receiverWallet.getUser().getFullName()
+                        " to " +
+                        receiverWallet.getUser().getFullName()
         );
 
-// receiver notification
+        // Receiver notification
         notificationService.createNotification(
                 receiverWallet.getUser().getId(),
                 "Wallet Credited",
                 "You received NGN " + amount +
-                        " from " + sender.getFullName()
+                        " from " +
+                        sender.getFullName()
+        );
+
+        log.info(
+                "Transfer completed from user {} to user {} amount {}",
+                sender.getId(),
+                request.getToUserId(),
+                amount
         );
 
         return mapToWalletResponse(senderWallet);
@@ -111,12 +167,20 @@ public class WalletServiceImpl implements WalletService {
     // =========================
     // TRANSACTION LOGGER
     // =========================
-    private void recordTransaction(Long walletId, BigDecimal amount, TransactionType type) {
+    private void recordTransaction(
+            Long walletId,
+            BigDecimal amount,
+            TransactionType type,
+            TransactionStatus status,
+            String groupReference
+    ) {
 
         Transaction tx = Transaction.builder()
                 .walletId(walletId)
                 .amount(amount)
                 .type(type)
+                .status(status)
+                .groupReference(groupReference)
                 .reference("TXN-" + System.currentTimeMillis())
                 .createdAt(LocalDateTime.now())
                 .build();
@@ -124,26 +188,13 @@ public class WalletServiceImpl implements WalletService {
         transactionRepository.save(tx);
     }
 
+
     // =========================
     // MAPPER
     // =========================
     private WalletResponse mapToWalletResponse(Wallet wallet) {
 
-        UserResponse userResponse = UserResponse.builder()
-                .id(wallet.getUser().getId())
-                .fullName(wallet.getUser().getFullName())
-                .email(wallet.getUser().getEmail())
-                .role(wallet.getUser().getRole())
-                .createdAt(wallet.getUser().getCreatedAt())
-                .build();
-
-        return WalletResponse.builder()
-                .id(wallet.getId())
-                .user(userResponse)
-                .balance(wallet.getBalance())
-                .createdAt(wallet.getCreatedAt())
-                .updatedAt(wallet.getUpdatedAt())
-                .build();
+        return getWalletResponse(wallet);
     }
 
     // =========================
@@ -185,22 +236,34 @@ public class WalletServiceImpl implements WalletService {
 
     @Override
     public WalletResponse creditWallet(BigDecimal amount) {
-
         User user = getAuthenticatedUser();
+
+        log.info(
+                "Wallet credit initiated by user ID: {} amount: {}",
+                user.getId(),
+                amount
+        );
 
         Wallet wallet = walletRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new RuntimeException("Wallet not found"));
+
+        if (wallet.isFrozen()) {
+            throw new WalletFrozenException(
+                    "Wallet is frozen. Operation not allowed."
+            );
+        }
 
         wallet.setBalance(wallet.getBalance().add(amount));
         wallet.setUpdatedAt(LocalDateTime.now());
 
         Wallet updatedWallet = walletRepository.save(wallet);
 
-        // Record transaction
         recordTransaction(
                 wallet.getId(),
                 amount,
-                TransactionType.CREDIT
+                TransactionType.CREDIT,
+                TransactionStatus.SUCCESS,
+                null
         );
 
         // Create notification
@@ -208,19 +271,42 @@ public class WalletServiceImpl implements WalletService {
                 user.getId(),
                 "Wallet Credited",
                 "Your wallet was credited with NGN " + amount
+
+        );
+        log.info(
+                "Wallet credited successfully for user ID: {}",
+                user.getId()
+        );
+
+        // Send email
+        emailService.sendEmail(
+                user.getEmail(),
+                "Wallet Credited",
+                "Your wallet has been credited with NGN " + amount
         );
 
         return mapToWalletResponse(updatedWallet);
     }
-
 
     @Override
     public WalletResponse debitWallet(BigDecimal amount) {
 
         User user = getAuthenticatedUser();
 
+        log.info(
+                "Wallet debit initiated by user ID: {} amount: {}",
+                user.getId(),
+                amount
+        );
+  
         Wallet wallet = walletRepository.findByUserId(user.getId())
-                .orElseThrow(() -> new RuntimeException("Wallet not found"));
+                .orElseThrow(() -> new WalletNotFoundException("Wallet not found"));
+
+        if (wallet.isFrozen()) {
+            throw new WalletFrozenException(
+                    "Wallet is frozen. Operation not allowed."
+            );
+        }
 
         if (wallet.getBalance().compareTo(amount) < 0) {
             throw new RuntimeException("Insufficient balance");
@@ -231,12 +317,25 @@ public class WalletServiceImpl implements WalletService {
 
         Wallet updatedWallet = walletRepository.save(wallet);
 
-        recordTransaction(wallet.getId(), amount, TransactionType.DEBIT);
+        recordTransaction(
+                wallet.getId(),
+                amount,
+                TransactionType.CREDIT,
+                TransactionStatus.SUCCESS,
+                null
+        );
         // Create notification
         notificationService.createNotification(
                 user.getId(),
                 "Wallet Debited",
                 "Your wallet was debited with NGN " + amount
+        );
+
+        // Send email
+        emailService.sendEmail(
+                user.getEmail(),
+                "Wallet Debited",
+                "Your wallet has been debited with NGN " + amount
         );
 
         return mapToWalletResponse(updatedWallet);

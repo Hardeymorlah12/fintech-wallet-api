@@ -25,6 +25,11 @@ import java.time.LocalDateTime;
         @Enumerated(EnumType.STRING)
         private TransactionType type;
 
+        private String groupReference;
+
+        @Enumerated(EnumType.STRING)
+        private TransactionStatus status;
+
         private BigDecimal amount;
 
         private Long walletId;

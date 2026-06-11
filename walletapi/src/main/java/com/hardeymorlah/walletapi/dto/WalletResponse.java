@@ -17,6 +17,8 @@ import java.time.LocalDateTime;
 
         private BigDecimal balance;
 
+        private boolean frozen;
+
         private LocalDateTime createdAt;
 
         private LocalDateTime updatedAt;

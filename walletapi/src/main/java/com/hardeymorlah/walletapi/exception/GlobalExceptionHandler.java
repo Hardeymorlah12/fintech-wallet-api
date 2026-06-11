@@ -128,6 +128,57 @@ public class GlobalExceptionHandler {
                 HttpStatus.NOT_FOUND
         );
     }
+
+    @ExceptionHandler(WalletFrozenException.class)
+    public ResponseEntity<ApiResponse<?>> handleWalletFrozenException(
+            WalletFrozenException ex
+    ) {
+
+        ApiResponse<?> response = ApiResponse.builder()
+                .success(false)
+                .message(ex.getMessage())
+                .data(null)
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        return ResponseEntity.badRequest().body(response);
+    }
+
+    @ExceptionHandler(WalletNotFoundException.class)
+    public ResponseEntity<ApiResponse<?>> handleWalletNotFoundException(
+            WalletNotFoundException ex
+    ) {
+
+        ApiResponse<?> response = ApiResponse.builder()
+                .success(false)
+                .message(ex.getMessage())
+                .data(null)
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        return new ResponseEntity<>(
+                response,
+                HttpStatus.NOT_FOUND
+        );
+    }
+
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ApiResponse<?>> handleUserNotFoundException(
+            UserNotFoundException ex
+    ) {
+
+        ApiResponse<?> response = ApiResponse.builder()
+                .success(false)
+                .message(ex.getMessage())
+                .data(null)
+                .timestamp(LocalDateTime.now())
+                .build();
+
+        return new ResponseEntity<>(
+                response,
+                HttpStatus.NOT_FOUND
+        );
+    }
 }
 
 

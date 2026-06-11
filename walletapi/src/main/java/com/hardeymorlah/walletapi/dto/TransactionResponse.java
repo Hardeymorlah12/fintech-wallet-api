@@ -1,5 +1,6 @@
 package com.hardeymorlah.walletapi.dto;
 
+import com.hardeymorlah.walletapi.entity.TransactionStatus;
 import com.hardeymorlah.walletapi.entity.TransactionType;
 import lombok.Builder;
 import lombok.Data;
@@ -7,19 +8,23 @@ import lombok.Data;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-
-    @Data
-    @Builder
+@Data
+@Builder
 public class TransactionResponse {
 
-        private Long id;
+    private Long id;
 
-        private String reference;
+    private Long walletId;
 
-        private TransactionType type;
+    private BigDecimal amount;
 
-        private BigDecimal amount;
+    private TransactionType type;
 
-        private LocalDateTime createdAt;
-    }
+    private TransactionStatus status;
 
+    private String groupReference;
+
+    private String reference;
+
+    private LocalDateTime createdAt;
+}
