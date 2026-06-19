@@ -1,7 +1,6 @@
 package com.hardeymorlah.walletapi.service;
 
-import com.hardeymorlah.walletapi.dto.TransferRequest;
-import com.hardeymorlah.walletapi.dto.WalletResponse;
+import com.hardeymorlah.walletapi.dto.*;
 import com.hardeymorlah.walletapi.entity.*;
 import com.hardeymorlah.walletapi.exception.*;
 import com.hardeymorlah.walletapi.repository.TransactionRepository;
@@ -15,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 
 import static com.hardeymorlah.walletapi.service.AdminServiceImpl.getWalletResponse;
 
@@ -298,7 +298,7 @@ public class WalletServiceImpl implements WalletService {
                 user.getId(),
                 amount
         );
-  
+
         Wallet wallet = walletRepository.findByUserId(user.getId())
                 .orElseThrow(() -> new WalletNotFoundException("Wallet not found"));
 
@@ -340,4 +340,114 @@ public class WalletServiceImpl implements WalletService {
 
         return mapToWalletResponse(updatedWallet);
     }
+
+    @Override
+    public StatementResponse generateStatement(
+            LocalDateTime startDate,
+            LocalDateTime endDate
+    ) {
+
+        User user = getAuthenticatedUser();
+
+        Wallet wallet = walletRepository.findByUserId(user.getId())
+                .orElseThrow(() ->
+                        new RuntimeException("Wallet not found"));
+
+        List<Transaction> transactions =
+                transactionRepository.findByWalletIdAndCreatedAtBetween(
+                        wallet.getId(),
+                        startDate,
+                        endDate
+                );
+
+        BigDecimal totalCredits = transactions.stream()
+                .filter(tx ->
+                        tx.getType() == TransactionType.CREDIT)
+                .map(Transaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalDebits = transactions.stream()
+                .filter(tx ->
+                        tx.getType() == TransactionType.DEBIT)
+                .map(Transaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal netBalanceChange =
+                totalCredits.subtract(totalDebits);
+
+        List<TransactionResponse> transactionResponses =
+                transactions.stream()
+                        .map(tx -> TransactionResponse.builder()
+                                .id(tx.getId())
+                                .walletId(tx.getWalletId())
+                                .reference(tx.getReference())
+                                .groupReference(tx.getGroupReference())
+                                .type(tx.getType())
+                                .status(tx.getStatus())
+                                .amount(tx.getAmount())
+                                .createdAt(tx.getCreatedAt())
+                                .build())
+                        .toList();
+
+        return StatementResponse.builder()
+                .totalCredits(totalCredits)
+                .totalDebits(totalDebits)
+                .netBalanceChange(netBalanceChange)
+                .transactions(transactionResponses)
+                .build();
+    }
+
+    @Override
+    public DashboardResponse getDashboard() {
+
+        String email = SecurityContextHolder
+                .getContext()
+                .getAuthentication()
+                .getName();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() ->
+                        new RuntimeException("User not found"));
+
+        Wallet wallet = walletRepository.findByUserId(user.getId())
+                .orElseThrow(() ->
+                        new RuntimeException("Wallet not found"));
+
+        List<Transaction> transactions =
+                transactionRepository.findByWalletId(wallet.getId());
+
+        BigDecimal totalCredits = transactions.stream()
+                .filter(tx ->
+                        tx.getType() == TransactionType.CREDIT
+                                && tx.getStatus() == TransactionStatus.SUCCESS)
+                .map(Transaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalDebits = transactions.stream()
+                .filter(tx ->
+                        tx.getType() == TransactionType.DEBIT
+                                && tx.getStatus() == TransactionStatus.SUCCESS)
+                .map(Transaction::getAmount)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        long successfulTransactions = transactions.stream()
+                .filter(tx ->
+                        tx.getStatus() == TransactionStatus.SUCCESS)
+                .count();
+
+        long reversedTransactions = transactions.stream()
+                .filter(tx ->
+                        tx.getStatus() == TransactionStatus.REVERSED)
+                .count();
+
+        return DashboardResponse.builder()
+                .walletBalance(wallet.getBalance())
+                .totalCredits(totalCredits)
+                .totalDebits(totalDebits)
+                .totalTransactions((long) transactions.size())
+                .successfulTransactions(successfulTransactions)
+                .reversedTransactions(reversedTransactions)
+                .build();
+    }
 }
+

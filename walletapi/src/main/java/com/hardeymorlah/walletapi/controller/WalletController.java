@@ -1,5 +1,7 @@
 package com.hardeymorlah.walletapi.controller;
 
+import com.hardeymorlah.walletapi.dto.ApiResponse;
+import com.hardeymorlah.walletapi.dto.DashboardResponse;
 import com.hardeymorlah.walletapi.dto.TransferRequest;
 import com.hardeymorlah.walletapi.dto.WalletResponse;
 import com.hardeymorlah.walletapi.entity.User;
@@ -10,8 +12,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
-    @RestController
+@RestController
     @RequestMapping("/api/v1/wallet")
     @RequiredArgsConstructor
     public class WalletController {
@@ -47,6 +50,23 @@ import java.math.BigDecimal;
         @PostMapping("/transfer")
         public ResponseEntity<WalletResponse> transfer(@RequestBody TransferRequest request) {
             return ResponseEntity.ok(walletService.transfer(request));
+        }
+
+        @GetMapping("/dashboard")
+        public ResponseEntity<ApiResponse<DashboardResponse>>
+        getDashboard() {
+
+            DashboardResponse dashboard =
+                    walletService.getDashboard();
+
+            return ResponseEntity.ok(
+                    ApiResponse.<DashboardResponse>builder()
+                            .success(true)
+                            .message("Dashboard fetched successfully")
+                            .data(dashboard)
+                            .timestamp(LocalDateTime.now())
+                            .build()
+            );
         }
     }
 
